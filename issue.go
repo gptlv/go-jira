@@ -52,6 +52,15 @@ type Issue struct {
 	Names          map[string]string    `json:"names,omitempty" structs:"names,omitempty"`
 }
 
+// Stringer interface
+func (i Issue) String() string {
+	if i.Fields == nil {
+		return fmt.Sprintf("[%s]", i.Key)
+	}
+
+	return fmt.Sprintf("[%s] %s", i.Key, i.Fields.Summary)
+}
+
 // ChangelogItems reflects one single changelog item of a history item
 type ChangelogItems struct {
 	Field      string      `json:"field" structs:"field"`
@@ -320,12 +329,13 @@ type TransitionField struct {
 type CreateTransitionPayload struct {
 	Update     TransitionPayloadUpdate `json:"update,omitempty" structs:"update,omitempty"`
 	Transition TransitionPayload       `json:"transition" structs:"transition"`
-	Fields     TransitionPayloadFields `json:"fields" structs:"fields"`
+	Fields     TransitionFields        `json:"fields" structs:"fields"`
 }
 
 // TransitionPayloadUpdate represents the updates of Transition calls like DoTransition
 type TransitionPayloadUpdate struct {
-	Comment []TransitionPayloadComment `json:"comment,omitempty" structs:"comment,omitempty"`
+	Comment    []TransitionPayloadComment   `json:"comment,omitempty" structs:"comment,omitempty"`
+	IssueLinks []TransitionPayloadIssueLink `json:"issuelinks,omitempty" structs:"issuelinks,omitempty"`
 }
 
 // TransitionPayloadComment represents comment in Transition payload
@@ -336,6 +346,7 @@ type TransitionPayloadComment struct {
 // TransitionPayloadCommentBody represents body of comment in payload
 type TransitionPayloadCommentBody struct {
 	Body string `json:"body,omitempty"`
+	Type IssueLink
 }
 
 // TransitionPayload represents the request payload of Transition calls like DoTransition
@@ -343,9 +354,20 @@ type TransitionPayload struct {
 	ID string `json:"id" structs:"id"`
 }
 
+type DoTransitionPayload struct {
+	Update     TransitionPayloadUpdate `json:"update,omitempty" structs:"update,omitempty"`
+	Transition TransitionPayload       `json:"transition" structs:"transition"`
+	Fields     TransitionFields        `json:"fields" structs:"fields"`
+}
+
+type TransitionPayloadIssueLink struct {
+	Add IssueLink `json:"add,omitempty" structs:"add,omitempty"`
+}
+
 // TransitionPayloadFields represents the fields that can be set when executing a transition
-type TransitionPayloadFields struct {
+type TransitionFields struct {
 	Resolution *Resolution `json:"resolution,omitempty" structs:"resolution,omitempty"`
+	BlockUntil string      `json:"customfield_10253,omitempty" structs:"customfield_10253,omitempty"`
 }
 
 // Option represents an option value in a SelectList or MultiSelect
@@ -372,7 +394,7 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 // MarshalJSON will transform the time.Time into a Jira time
 // during the creation of a Jira request
 func (t Time) MarshalJSON() ([]byte, error) {
-	return []byte(time.Time(t).Format("\"2006-01-02T15:04:05.000-0700\"")), nil
+	return []byte(time.Time(t).Format("\"2006-01-02T15:04:05.999-0700\"")), nil
 }
 
 // UnmarshalJSON will transform the Jira date into a time.Time
@@ -483,6 +505,16 @@ type Comment struct {
 	Updated      string            `json:"updated,omitempty" structs:"updated,omitempty"`
 	Created      string            `json:"created,omitempty" structs:"created,omitempty"`
 	Visibility   CommentVisibility `json:"visibility,omitempty" structs:"visibility,omitempty"`
+	Properties   []Property        `json:"properties,omitempty" structs:"properties,omitempty"`
+}
+
+type Property struct {
+	Key   string `json:"key,omitempty" structs:"key,omitempty"`
+	Value Value  `json:"value,omitempty" structs:"value,omitempty"`
+}
+
+type Value struct {
+	Internal bool `json:"internal,omitempty" structs:"internal,omitempty"`
 }
 
 // FixVersion represents a software release in which an issue is fixed.
@@ -613,7 +645,7 @@ type RemoteLinkStatus struct {
 // This can be an issue id, or an issue key.
 // If the issue cannot be found via an exact match, Jira will also look for the issue in a case-insensitive way, or by looking to see if the issue was moved.
 //
-// The given options will be appended to the query string
+//	The given options will be appended to the query string
 //
 // Jira API docs: https://docs.atlassian.com/jira/REST/latest/#api/2/issue-getIssue
 func (s *IssueService) GetWithContext(ctx context.Context, issueID string, options *GetQueryOptions) (*Issue, *Response, error) {
@@ -1295,15 +1327,17 @@ func (s *IssueService) DoTransitionWithPayload(ticketID, payload interface{}) (*
 }
 
 // InitIssueWithMetaAndFields returns Issue with with values from fieldsConfig properly set.
-//  * metaProject should contain metaInformation about the project where the issue should be created.
-//  * metaIssuetype is the MetaInformation about the Issuetype that needs to be created.
-//  * fieldsConfig is a key->value pair where key represents the name of the field as seen in the UI
-//		And value is the string value for that particular key.
+//   - metaProject should contain metaInformation about the project where the issue should be created.
+//   - metaIssuetype is the MetaInformation about the Issuetype that needs to be created.
+//   - fieldsConfig is a key->value pair where key represents the name of the field as seen in the UI
+//     And value is the string value for that particular key.
+//
 // Note: This method doesn't verify that the fieldsConfig is complete with mandatory fields. The fieldsConfig is
-//		 supposed to be already verified with MetaIssueType.CheckCompleteAndAvailable. It will however return
-//		 error if the key is not found.
-//		 All values will be packed into Unknowns. This is much convenient. If the struct fields needs to be
-//		 configured as well, marshalling and unmarshalling will set the proper fields.
+//
+//	supposed to be already verified with MetaIssueType.CheckCompleteAndAvailable. It will however return
+//	error if the key is not found.
+//	All values will be packed into Unknowns. This is much convenient. If the struct fields needs to be
+//	configured as well, marshalling and unmarshalling will set the proper fields.
 func InitIssueWithMetaAndFields(metaProject *MetaProject, metaIssuetype *MetaIssueType, fieldsConfig map[string]string) (*Issue, error) {
 	issue := new(Issue)
 	issueFields := new(IssueFields)
