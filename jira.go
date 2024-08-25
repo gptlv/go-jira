@@ -111,6 +111,7 @@ func NewClient(httpClient httpClient, baseURL string) (*Client, error) {
 	c.ServiceDesk = &ServiceDeskService{client: c}
 	c.Customer = &CustomerService{client: c}
 	c.Request = &RequestService{client: c}
+	c.Object = &ObjectService{client: c}
 
 	return c, nil
 }
